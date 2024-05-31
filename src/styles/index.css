@@ -149,3 +149,13 @@ code {
 .completed-delete-button:hover {
   color: #af5b5e;
 }
+
+.completed-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.btn-clear-all {
+  margin-left: 15px;
+}
