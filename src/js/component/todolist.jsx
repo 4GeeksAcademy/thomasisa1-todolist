@@ -1,5 +1,3 @@
-
-
 import React, { useState, useEffect } from 'react';
 import '../../styles/index.css';
 
@@ -9,135 +7,157 @@ function TodoList() {
   const [isLoading, setIsLoading] = useState(true);
   const [user, setUser] = useState('thomasisa1');
 
-  const API_URL = `https://playground.4geeks.com/todo/users/${user}`;
+  const API_BASE_URL = `https://playground.4geeks.com/todo`;
 
   useEffect(() => {
-    createUser();
+    initializeUser();
   }, []);
+
+  const handleApiError = async (response) => {
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`API error: ${response.status} - ${errorText}`);
+    }
+  };
+const initializeUser = async () => {
+  const response = await fetch(`${API_BASE_URL}/users/${user}`, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json'
+    }
+  });
+  if(response.ok){
+    const data = await response.json()
+    setTodos(data.todos)
+  }
+  else{
+    const response = await fetch(`${API_BASE_URL}/users/${user}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
+  }
+  setIsLoading(false)
+}
+  // const initializeUser = async () => {
+  //   try {
+  //     await fetchTodos();
+  //   } catch (error) {
+  //     if (error.message.includes('404')) {
+  //       await createUser();
+  //     } else {
+  //       console.error('Error initializing user:', error);
+  //       setIsLoading(false);
+  //     }
+  //   }
+  // };
 
   const createUser = async () => {
     try {
-      const response = await fetch(API_URL, {
+      const response = await fetch(`${API_BASE_URL}/users`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify([]) // Creating an empty todo list for the user
+        body: JSON.stringify({
+          name: user,
+          todos: []
+        })
       });
-      if (response.ok) {
-        fetchTodos();
-      } else {
-        console.log('Error: ', response.status, response.statusText);
-      }
+      await handleApiError(response);
+      await fetchTodos();
     } catch (error) {
-      console.log('Error creating user:', error);
+      console.error('Error creating user:', error);
+      setIsLoading(false);
     }
   };
 
   const fetchTodos = async () => {
     try {
-      const response = await fetch(API_URL, {
+      const response = await fetch(`${API_BASE_URL}/users/${users}`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json'
         }
       });
-      if (response.ok) {
-        const data = await response.json();
-        setTodos(data);
-      } else {
-        console.log('Error fetching tasks:', await response.text());
-      }
+      await handleApiError(response);
+      const data = await response.json();
+      setTodos(Array.isArray(data) ? data : []);
     } catch (error) {
-      console.log('Error fetching tasks:', error);
+      console.error('Error fetching tasks:', error);
+      throw error; // rethrow to catch in initializeUser
     } finally {
       setIsLoading(false);
     }
   };
 
-  const addTodoToServer = async (newTodoItem) => {
-    try {
-      const response = await fetch(API_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(newTodoItem)
-      });
-      if (response.ok) {
-        const createdTodo = await response.json();
-        return createdTodo;
-      } else {
-        console.log('Error adding task:', await response.text());
-        return null;
-      }
-    } catch (error) {
-      console.log('Error adding task:', error);
-      return null;
-    }
-  };
-
-  const syncTodos = async (updatedTodos) => {
-    try {
-      const response = await fetch(API_URL, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(updatedTodos)
-      });
-      if (!response.ok) {
-        console.log('Error syncing tasks:', await response.text());
-      }
-    } catch (error) {
-      console.log('Error syncing tasks:', error);
-    }
-  };
+  // const syncTodos = async (updatedTodos) => {
+  //   try {
+  //     const response = await fetch(`${API_BASE_URL}/${user}`, {
+  //       method: 'PUT',
+  //       headers: {
+  //         'Content-Type': 'application/json'
+  //       },
+  //       body: JSON.stringify(updatedTodos)
+  //     });
+  //     await handleApiError(response);
+  //   } catch (error) {
+  //     console.error('Error syncing tasks:', error);
+  //   }
+  // };
 
   const handleAddTodo = async (e) => {
     if ((e.type === 'keypress' && e.key === 'Enter') || e.type === 'click') {
       if (newTodo.trim()) {
         const newTodoItem = { label: newTodo, is_done: false };
-        const createdTodo = await addTodoToServer(newTodoItem);
-        if (createdTodo) {
-          const updatedTodos = [...todos, createdTodo];
-          setTodos(updatedTodos);
-          setNewTodo('');
-          await syncTodos(updatedTodos);
-        }
+        const response = await fetch(`${API_BASE_URL}/todos/${user}`, {
+          method: 'POST', 
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify(newTodoItem)
+        });
+        const data = await response.json();
+        const updatedTodos = [...todos, data];
+        setTodos(updatedTodos);
+        setNewTodo('');
       }
     }
   };
 
   const handleDeleteTodo = async (index) => {
-    const updatedTodos = todos.filter((_, i) => i !== index);
-    setTodos(updatedTodos);
-    await syncTodos(updatedTodos);
+    let todo = todos[index]
+    setTodos(todos.toSpliced(index,1))
+    const response = await fetch(`${API_BASE_URL}/todos/${todo.id}`, {
+      method: 'DELETE', 
+      headers:{'Content-Type':'application/json'},
+    });
+
   };
 
   const handleCompleteTodo = async (index) => {
-    const updatedTodos = todos.map((todo, i) =>
-      i === index ? { ...todo, is_done: !todo.is_done } : todo
-    );
-    setTodos(updatedTodos);
-    await syncTodos(updatedTodos);
+    let todo = todos[index]
+    todo.is_done = true
+    setTodos(todos.toSpliced(index,1,todo))
+    const response = await fetch(`${API_BASE_URL}/todos/${todo.id}`, {
+      method: 'PUT', 
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(todo)
+    });
   };
 
   const handleClearAll = async () => {
     try {
-      const response = await fetch(API_URL, {
+      const response = await fetch(`${API_BASE_URL}/users/${user}`, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json'
         }
       });
-      if (response.ok) {
-        setTodos([]);
-      } else {
-        console.log('Error clearing tasks:', await response.text());
-      }
+      await handleApiError(response);
+      setTodos([]);
+      await createUser(); // Recreate user with an empty list after clearing
     } catch (error) {
-      console.log('Error clearing tasks:', error);
+      console.error('Error clearing tasks:', error);
     }
   };
 
@@ -164,7 +184,7 @@ function TodoList() {
               <li className="todo-empty">No tasks, add a task</li>
             ) : (
               todos.map((todo, index) => (
-                <li key={todo.id} className="todo-list-item">
+                <li key={index} className="todo-list-item">
                   <span
                     onClick={() => handleCompleteTodo(index)}
                     className={`todo-check ${todo.is_done ? 'completed' : ''}`}
