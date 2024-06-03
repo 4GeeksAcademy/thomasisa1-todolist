@@ -19,103 +19,38 @@ function TodoList() {
       throw new Error(`API error: ${response.status} - ${errorText}`);
     }
   };
-const initializeUser = async () => {
-  const response = await fetch(`${API_BASE_URL}/users/${user}`, {
-    method: 'GET',
-    headers: {
-      'Content-Type': 'application/json'
-    }
-  });
-  if(response.ok){
-    const data = await response.json()
-    setTodos(data.todos)
-  }
-  else{
+
+  const initializeUser = async () => {
     const response = await fetch(`${API_BASE_URL}/users/${user}`, {
-      method: 'POST',
+      method: 'GET',
       headers: {
         'Content-Type': 'application/json'
       }
     });
-  }
-  setIsLoading(false)
-}
-  // const initializeUser = async () => {
-  //   try {
-  //     await fetchTodos();
-  //   } catch (error) {
-  //     if (error.message.includes('404')) {
-  //       await createUser();
-  //     } else {
-  //       console.error('Error initializing user:', error);
-  //       setIsLoading(false);
-  //     }
-  //   }
-  // };
-
-  const createUser = async () => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/users`, {
+    if (response.ok) {
+      const data = await response.json();
+      setTodos(data.todos);
+    } else {
+      await fetch(`${API_BASE_URL}/users/${user}`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          name: user,
-          todos: []
-        })
-      });
-      await handleApiError(response);
-      await fetchTodos();
-    } catch (error) {
-      console.error('Error creating user:', error);
-      setIsLoading(false);
-    }
-  };
-
-  const fetchTodos = async () => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/users/${users}`, {
-        method: 'GET',
         headers: {
           'Content-Type': 'application/json'
         }
       });
-      await handleApiError(response);
-      const data = await response.json();
-      setTodos(Array.isArray(data) ? data : []);
-    } catch (error) {
-      console.error('Error fetching tasks:', error);
-      throw error; // rethrow to catch in initializeUser
-    } finally {
-      setIsLoading(false);
     }
+    setIsLoading(false);
   };
-
-  // const syncTodos = async (updatedTodos) => {
-  //   try {
-  //     const response = await fetch(`${API_BASE_URL}/${user}`, {
-  //       method: 'PUT',
-  //       headers: {
-  //         'Content-Type': 'application/json'
-  //       },
-  //       body: JSON.stringify(updatedTodos)
-  //     });
-  //     await handleApiError(response);
-  //   } catch (error) {
-  //     console.error('Error syncing tasks:', error);
-  //   }
-  // };
 
   const handleAddTodo = async (e) => {
     if ((e.type === 'keypress' && e.key === 'Enter') || e.type === 'click') {
       if (newTodo.trim()) {
         const newTodoItem = { label: newTodo, is_done: false };
         const response = await fetch(`${API_BASE_URL}/todos/${user}`, {
-          method: 'POST', 
-          headers:{'Content-Type':'application/json'},
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(newTodoItem)
         });
+        await handleApiError(response);
         const data = await response.json();
         const updatedTodos = [...todos, data];
         setTodos(updatedTodos);
@@ -125,41 +60,47 @@ const initializeUser = async () => {
   };
 
   const handleDeleteTodo = async (index) => {
-    let todo = todos[index]
-    setTodos(todos.toSpliced(index,1))
-    const response = await fetch(`${API_BASE_URL}/todos/${todo.id}`, {
-      method: 'DELETE', 
-      headers:{'Content-Type':'application/json'},
+    const todo = todos[index];
+    const updatedTodos = todos.filter((_, i) => i !== index);
+    setTodos(updatedTodos);
+    await fetch(`${API_BASE_URL}/todos/${todo.id}`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
     });
-
   };
 
   const handleCompleteTodo = async (index) => {
-    let todo = todos[index]
-    todo.is_done = true
-    setTodos(todos.toSpliced(index,1,todo))
-    const response = await fetch(`${API_BASE_URL}/todos/${todo.id}`, {
-      method: 'PUT', 
-      headers:{'Content-Type':'application/json'},
+    const updatedTodos = todos.map((todo, i) =>
+      i === index ? { ...todo, is_done: !todo.is_done } : todo
+    );
+    setTodos(updatedTodos);
+    const todo = updatedTodos.find((todo, i) => i === index);
+    await fetch(`${API_BASE_URL}/todos/${todo.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(todo)
     });
   };
 
   const handleClearAll = async () => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/users/${user}`, {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      });
-      await handleApiError(response);
-      setTodos([]);
-      await createUser(); // Recreate user with an empty list after clearing
-    } catch (error) {
-      console.error('Error clearing tasks:', error);
-    }
+    const response = await fetch(`${API_BASE_URL}/users/${user}`, {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
+    await handleApiError(response);
+    setTodos([]);
+    await fetch(`${API_BASE_URL}/users/${user}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
   };
+
+  const activeTodos = todos.filter(todo => !todo.is_done);
+  const completedTodos = todos.filter(todo => todo.is_done);
 
   return (
     <div className="todo-container">
@@ -180,20 +121,20 @@ const initializeUser = async () => {
             <button onClick={handleAddTodo} className="todo-add-button">Add</button>
           </div>
           <ul className="todo-list">
-            {todos.length === 0 ? (
+            {activeTodos.length === 0 ? (
               <li className="todo-empty">No tasks, add a task</li>
             ) : (
-              todos.map((todo, index) => (
-                <li key={index} className="todo-list-item">
+              activeTodos.map((todo, index) => (
+                <li key={todo.id} className="todo-list-item">
                   <span
-                    onClick={() => handleCompleteTodo(index)}
+                    onClick={() => handleCompleteTodo(todos.indexOf(todo))}
                     className={`todo-check ${todo.is_done ? 'completed' : ''}`}
                   >
                     ✔
                   </span>
                   {todo.label}
                   <button
-                    onClick={() => handleDeleteTodo(index)}
+                    onClick={() => handleDeleteTodo(todos.indexOf(todo))}
                     className="todo-delete-button"
                   >
                     ✖
@@ -203,14 +144,31 @@ const initializeUser = async () => {
             )}
           </ul>
           <div className="todo-footer">
-            {todos.length} item{todos.length !== 1 ? 's' : ''} left
+            {activeTodos.length} item{activeTodos.length !== 1 ? 's' : ''} left
           </div>
           <div className="completed-header">
-            <h2 className="completed-title">Completed Tasks</h2>
+            <h2 className="completed-title">Completed Tasks ({completedTodos.length})</h2>
             <button className="btn btn-danger btn-clear-all" onClick={handleClearAll}>
               Clear All
             </button>
           </div>
+          <ul className="completed-list">
+            {completedTodos.length === 0 ? (
+              <li className="todo-empty">No completed tasks</li>
+            ) : (
+              completedTodos.map((todo, index) => (
+                <li key={todo.id} className="completed-list-item">
+                  {todo.label}
+                  <button
+                    onClick={() => handleDeleteTodo(todos.indexOf(todo))}
+                    className="completed-delete-button"
+                  >
+                    ✖
+                  </button>
+                </li>
+              ))
+            )}
+          </ul>
         </>
       )}
     </div>
